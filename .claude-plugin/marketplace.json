@@ -18,7 +18,8 @@
           "args": ["${CLAUDE_PLUGIN_ROOT}/bin/roslyn-lsp-proxy.js"],
           "extensionToLanguage": {
             ".cs": "csharp"
-          }
+          },
+          "startupTimeout": 600000
         }
       }
     }
