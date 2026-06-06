@@ -73,19 +73,46 @@ async function main() {
   const cmd = "roslyn-language-server";
   const args = ["--stdio", "--logLevel", "Information", "--extensionLogDirectory", logDir];
 
+  // Track pending initialize so we can respond with a proper LSP error instead of silently hanging.
+  let pendingInitId = null;
+  let spawnError = null;
+  let errorReported = false;
+
+  function sendToClient(obj) {
+    const body = Buffer.from(JSON.stringify(obj), "utf8");
+    process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
+    process.stdout.write(body);
+  }
+
+  function reportFatalError(e) {
+    if (errorReported) return;
+    errorReported = true;
+    const msg = e.code === "ENOENT"
+      ? "roslyn-language-server not found. Install with:\n" +
+        "  dotnet tool install -g roslyn-language-server --prerelease \\\n" +
+        "    --add-source https://pkgs.dev.azure.com/azure-public/vside/_packaging/vs-impl/nuget/v3/index.json"
+      : `Failed to start roslyn-language-server: ${e.message}`;
+    log("FATAL:", msg.split("\n")[0]);
+    if (pendingInitId !== null) {
+      sendToClient({ jsonrpc: "2.0", id: pendingInitId, error: { code: -32099, message: msg } });
+    }
+    sendToClient({ jsonrpc: "2.0", method: "window/showMessage", params: { type: 1, message: msg } });
+    process.exit(1);
+  }
+
   const child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
   child.on("error", (e) => {
-    if (e.code === "ENOENT") {
-      log("FATAL: roslyn-language-server not found. Install it with:");
-      log("  dotnet tool install -g roslyn-language-server --prerelease \\");
-      log("    --add-source https://pkgs.dev.azure.com/azure-public/vside/_packaging/vs-impl/nuget/v3/index.json");
+    spawnError = e;
+    if (pendingInitId !== null) {
+      reportFatalError(e);
     } else {
-      log("FATAL: failed to spawn roslyn-language-server:", e.message);
+      // initialize hasn't arrived yet; give it a moment then give up
+      setTimeout(() => { if (!errorReported) reportFatalError(e); }, 2000);
     }
-    process.exit(1);
   });
   child.on("exit", (code) => { log("roslyn exited", code); process.exit(code || 0); });
   child.stderr.on("data", (d) => log("roslyn:", d.toString().trimEnd()));
+  child.stdin.on("error", () => {}); // ignore write-after-close errors
 
   // server -> client: straight passthrough
   child.stdout.pipe(process.stdout);
@@ -119,10 +146,10 @@ async function main() {
   }
 
   function handleClientFrame(frame, body) {
-    child.stdin.write(frame);
     let msg;
-    try { msg = JSON.parse(body.toString("utf8")); } catch { return; }
-    if (msg.method === "initialize") {
+    try { msg = JSON.parse(body.toString("utf8")); } catch { msg = null; }
+    if (msg && msg.method === "initialize") {
+      pendingInitId = msg.id;
       const p = msg.params || {};
       let dir = null;
       if (p.rootUri) { try { dir = url.fileURLToPath(p.rootUri); } catch {} }
@@ -131,9 +158,11 @@ async function main() {
         try { dir = url.fileURLToPath(p.workspaceFolders[0].uri); } catch {}
       }
       if (dir) { rootDir = dir; log("workspace root:", rootDir); }
-    } else if (msg.method === "initialized") {
+      if (spawnError) { reportFatalError(spawnError); return; }
+    } else if (msg && msg.method === "initialized") {
       injectWorkspaceOpen();
     }
+    if (!spawnError) child.stdin.write(frame);
   }
 
   process.stdin.on("data", (d) => {

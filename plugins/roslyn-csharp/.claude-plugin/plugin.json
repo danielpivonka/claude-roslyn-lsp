@@ -1,6 +1,6 @@
 {
   "name": "roslyn-csharp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "C# code intelligence via Microsoft's Roslyn language server, bridged through a stdio proxy that injects the proprietary solution/open notification so a generic LSP client loads the full workspace.",
   "author": {
     "name": "Daniel Pivonka"
