@@ -1,0 +1,17 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+roslyn-lsp-proxy-logs/
+
+# .NET build output (test fixture)
+test/fixture/**/bin/
+test/fixture/**/obj/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

@@ -1,0 +1,24 @@
+{
+  "name": "claude-roslyn-lsp",
+  "version": "1.0.0",
+  "description": "Bridge Microsoft's Roslyn C# language server (Microsoft.CodeAnalysis.LanguageServer) to generic LSP clients such as Claude Code, by injecting the proprietary solution/open notification so the workspace actually loads.",
+  "license": "MIT",
+  "author": "Daniel Pivonka",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "roslyn-lsp-proxy": "plugins/roslyn-csharp/bin/roslyn-lsp-proxy.js"
+  },
+  "scripts": {
+    "test": "python test/run-test.py"
+  },
+  "keywords": [
+    "lsp",
+    "roslyn",
+    "csharp",
+    "claude-code",
+    "language-server"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "claude-roslyn-lsp",
+  "owner": {
+    "name": "Daniel Pivonka"
+  },
+  "metadata": {
+    "description": "Microsoft Roslyn C# language server for generic LSP clients.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "roslyn-csharp",
+      "source": "./plugins/roslyn-csharp",
+      "description": "C# code intelligence via Microsoft's Roslyn language server, bridged through a stdio proxy that injects the proprietary solution/open notification so a generic LSP client loads the full workspace.",
+      "version": "1.0.0",
+      "category": "development",
+      "strict": false,
+      "lspServers": {
+        "roslyn-csharp": {
+          "command": "node",
+          "args": ["${CLAUDE_PLUGIN_ROOT}/bin/roslyn-lsp-proxy.js"],
+          "extensionToLanguage": {
+            ".cs": "csharp"
+          }
+        }
+      }
+    }
+  ]
+}
