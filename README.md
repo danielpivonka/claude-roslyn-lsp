@@ -1,28 +1,18 @@
 # claude-roslyn-lsp
 
-A Claude Code plugin that gives C# code intelligence through **Microsoft's Roslyn
-language server** (`Microsoft.CodeAnalysis.LanguageServer` — the same engine the
-VS Code C# extension uses), instead of the lighter-weight `csharp-ls`.
+A Claude Code plugin that brings full C# code intelligence via **Microsoft's Roslyn language server** (`Microsoft.CodeAnalysis.LanguageServer`) — the same engine powering the VS Code C# extension — instead of the lighter-weight `csharp-ls`.
 
-It ships a small stdio proxy that solves the one thing that otherwise stops Roslyn
-from working under a generic LSP client, and it acquires the server itself — no
-VS Code, no manual install, same behaviour on Windows / macOS / Linux.
+The plugin ships a small stdio proxy that solves the one thing preventing Roslyn from working under a generic LSP client. The server itself is installed separately as a standard `dotnet` global tool.
 
-## Why
+## Why Roslyn
 
-Roslyn is the most accurate C# language server and handles file churn (edits,
-deletes, renames) far better than `csharp-ls` — no stale "predefined type
-System.Object is not defined" diagnostic storms after bulk changes.
+Roslyn is the most accurate C# language server and handles file churn (edits, deletes, renames) far better than `csharp-ls` — no stale "predefined type System.Object is not defined" diagnostic storms after bulk changes.
 
-**But** Roslyn does *not* load a workspace from the standard LSP
-`initialize`/`rootUri`. It waits for the editor's **proprietary** `solution/open`
-notification (or `project/open`). A generic LSP client never sends those, so a
-directly-wired Roslyn server loads zero projects and returns empty results —
-actually *worse* than `csharp-ls`.
+The catch: Roslyn does *not* load a workspace from the standard LSP `initialize`/`rootUri`. It waits for the editor's **proprietary** `solution/open` notification (or `project/open`). A generic LSP client never sends those, so a directly-wired Roslyn server loads zero projects and returns empty results — actually *worse* than `csharp-ls`.
 
-Measured against the bundled two-project fixture (no `solution/open` vs. with it):
+This proxy fixes that by injecting `solution/open` automatically. Measured against the bundled two-project fixture:
 
-| query | without `solution/open` | with `solution/open` |
+| Query | Without `solution/open` | With `solution/open` |
 | --- | --- | --- |
 | `workspace/symbol "Greeter"` | 0 | 1 |
 | `references` (cross-project) | 1 (same file only) | 3 |
@@ -30,80 +20,68 @@ Measured against the bundled two-project fixture (no `solution/open` vs. with it
 ## How it works
 
 ```
-Claude Code ──stdio──▶ roslyn-lsp-proxy.js ──stdio──▶ Microsoft.CodeAnalysis.LanguageServer
+Claude Code ──stdio──▶ roslyn-lsp-proxy.js ──stdio──▶ roslyn-language-server
                               │
                               └─ after the client's `initialized`, injects
                                  `solution/open` for the workspace's .sln
                                  (falls back to `project/open` over .csproj)
 ```
 
-On first run the proxy downloads the framework-dependent **`neutral`** build of
-`Microsoft.CodeAnalysis.LanguageServer` from Microsoft's public NuGet feed (the
-MIT-licensed Roslyn build that other editor integrations use), caches it under
-your user cache dir, and runs it with `dotnet`. One artifact for every OS. The
-binary is **never bundled or redistributed by this project.**
-
-Then for every session it forwards all LSP traffic verbatim and injects
-`solution/open` right after `initialized`. Logs go to stderr /
-`<tmp>/roslyn-lsp-proxy-logs` only (never stdout, which is the LSP channel).
+The proxy forwards all LSP traffic verbatim and injects `solution/open` right after `initialized`. Logs go to stderr and `<tmp>/roslyn-lsp-proxy-logs/` only — never stdout, which is the LSP channel.
 
 ## Requirements
 
 - **Node.js** ≥ 18 (the proxy uses only built-ins — no `npm install`).
-- **`dotnet`** on `PATH` (override with `DOTNET_PATH`), with a runtime matching the
-  pinned Roslyn build's target framework — currently **.NET 10**. If you only have
-  an older runtime, pin an older server with `ROSLYN_LSP_VERSION`.
-- **Internet access on first run** (to fetch the server; cached thereafter). For
-  offline/air-gapped use, set `ROSLYN_LSP_DLL` to a local
-  `Microsoft.CodeAnalysis.LanguageServer.dll`.
+- **`dotnet`** ≥ 9 on `PATH`, used to install and run the language server.
+- The **`roslyn-language-server`** dotnet global tool (see Install below).
 
-No VS Code or C# extension required.
+## Install
 
-## Install (Claude Code)
+**1. Install the language server**
+
+```sh
+dotnet tool install -g roslyn-language-server --prerelease \
+  --add-source https://pkgs.dev.azure.com/azure-public/vside/_packaging/vs-impl/nuget/v3/index.json
+```
+
+This installs the same build the VS Code C# extension uses. To update it later:
+
+```sh
+dotnet tool update -g roslyn-language-server --prerelease \
+  --add-source https://pkgs.dev.azure.com/azure-public/vside/_packaging/vs-impl/nuget/v3/index.json
+```
+
+**2. Install the plugin**
 
 ```
 /plugin marketplace add danielpivonka/claude-roslyn-lsp
 /plugin install roslyn-csharp@claude-roslyn-lsp
-/plugin disable csharp-lsp@claude-plugins-official   # avoid two servers on .cs
+/plugin disable csharp-lsp@claude-plugins-official   # avoid two servers on .cs files
 /reload-plugins
 ```
 
-(Or `/plugin marketplace add /absolute/path/to/a/local/clone`.)
+To install from a local clone instead: `/plugin marketplace add /absolute/path/to/clone`
 
-The first C# query after enabling triggers a one-time server download and then a
-one-time solution load (tens of seconds on a large solution); after that it's
-cached and incremental.
+The first C# query triggers a one-time solution load (tens of seconds on a large solution); after that it's incremental.
 
-## Configuration
+## Testing
 
-| Env var | Purpose |
-| --- | --- |
-| `ROSLYN_LSP_DLL` | Absolute path to a `Microsoft.CodeAnalysis.LanguageServer.dll`. Skips the download (offline / custom builds). |
-| `ROSLYN_LSP_VERSION` | Pin a different server version from the feed (default: a known-good pinned version). |
-| `ROSLYN_FEED_INDEX` | Override the NuGet v3 feed index URL. |
-| `ROSLYN_FEED_BASE` | Override the resolved package base address (skips the index lookup). |
-| `DOTNET_PATH` | Path to the `dotnet` executable (default: `dotnet` on `PATH`). |
-
-## Test
-
-A self-contained integration test downloads/uses the server, drives the proxy
-against a two-project fixture (`App` → `Lib`), and asserts cross-project semantics
-resolve:
+A self-contained integration test drives the proxy against a two-project fixture (`App` → `Lib`) and asserts that cross-project semantics resolve correctly:
 
 ```
 node test/run-test.js
 ```
 
-Prints `PASS`/`FAIL` and exits non-zero on failure. Needs `node` and `dotnet`.
+Prints `PASS`/`FAIL` and exits non-zero on failure. Requires `node`, `dotnet`, and `roslyn-language-server` installed as a global tool (see Install above).
 
 ## Layout
 
 ```
 .
-├── .claude-plugin/marketplace.json     # marketplace catalog listing the plugin
+├── .claude-plugin/marketplace.json     # marketplace catalog entry
 ├── plugins/roslyn-csharp/
 │   ├── .claude-plugin/plugin.json      # plugin manifest + LSP server declaration
-│   └── bin/roslyn-lsp-proxy.js         # the proxy (acquisition + solution/open injection)
+│   └── bin/roslyn-lsp-proxy.js         # the proxy (solution/open injection)
 └── test/
     ├── fixture/                        # minimal App→Lib C# solution
     └── run-test.js                     # integration test
@@ -111,26 +89,11 @@ Prints `PASS`/`FAIL` and exits non-zero on failure. Needs `node` and `dotnet`.
 
 ## Troubleshooting
 
-- **Empty results / no symbols.** Check `<tmp>/roslyn-lsp-proxy-logs/` and the
-  proxy's stderr for `roslyn dll:` and `injecting solution/open:`. No "injecting"
-  line means no `.sln`/`.csproj` was found under the client's `rootUri`.
-- **Server exits immediately.** You likely lack the .NET runtime the pinned build
-  targets (currently .NET 10). Install it, or pin an older `ROSLYN_LSP_VERSION`.
-- **`${CLAUDE_PLUGIN_ROOT}` not expanded.** It's documented for plugin MCP servers
-  and hooks; if your Claude Code build doesn't expand it for LSP `args`, edit
-  `plugins/roslyn-csharp/.claude-plugin/plugin.json` and replace it with the
-  absolute path to `plugins/roslyn-csharp`.
-- **First run is slow.** It's downloading ~40 MB once. Subsequent runs use the
-  cache under your user cache directory.
+- **`roslyn-language-server` not found.** The dotnet global tool isn't installed or `~/.dotnet/tools` isn't on your `PATH`. Run the install command from the Install section above, then ensure `~/.dotnet/tools` is in your shell's `PATH`.
+- **Empty results / no symbols.** Check `<tmp>/roslyn-lsp-proxy-logs/` and the proxy's stderr for `injecting solution/open:`. If there's no "injecting" line, no `.sln` or `.csproj` was found under the client's `rootUri`.
+- **Server exits immediately.** Your .NET runtime may not meet the tool's requirements. Run `dotnet --version` and compare against the installed tool version.
+- **`${CLAUDE_PLUGIN_ROOT}` not expanded.** If your Claude Code build doesn't expand it for LSP `args`, edit `plugins/roslyn-csharp/.claude-plugin/plugin.json` and replace it with the absolute path to `plugins/roslyn-csharp`.
 
 ## Licensing
 
-This project's code (the proxy, manifests, tests) is MIT — see [LICENSE](LICENSE).
-
-It does **not** include or redistribute any Microsoft binary. At runtime it
-downloads `Microsoft.CodeAnalysis.LanguageServer` (part of
-[dotnet/roslyn](https://github.com/dotnet/roslyn), MIT-licensed) from Microsoft's
-public NuGet feed. This project is not affiliated with or endorsed by Microsoft.
-"Roslyn", ".NET", and "Visual Studio" are trademarks of Microsoft.
-
-This is not legal advice; review the upstream licenses for your own use.
+MIT — see [LICENSE](LICENSE). The `roslyn-language-server` tool installed separately is part of [dotnet/roslyn](https://github.com/dotnet/roslyn) and is also MIT-licensed.

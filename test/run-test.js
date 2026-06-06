@@ -11,9 +11,9 @@
  *   - textDocument/references on the Greeter class returns >= 2
  *     (declaration in Lib + usage in App = cross-project)
  *
- * Exit code 0 on PASS, 1 on FAIL. Requires: node and dotnet. The proxy
- * acquires the Roslyn server itself from NuGet (cached after first run), or
- * uses ROSLYN_LSP_DLL if set. No VS Code or C# extension required.
+ * Exit code 0 on PASS, 1 on FAIL. Requires: node, dotnet, and the
+ * roslyn-language-server global tool installed (see README). Set ROSLYN_LSP_DLL
+ * to point at a specific DLL instead.
  */
 "use strict";
 const { spawn } = require("child_process");
