@@ -1,11 +1,8 @@
 {
   "name": "claude-roslyn-lsp",
+  "description": "Microsoft Roslyn C# language server for generic LSP clients such as Claude Code.",
   "owner": {
     "name": "Daniel Pivonka"
-  },
-  "metadata": {
-    "description": "Microsoft Roslyn C# language server for generic LSP clients.",
-    "version": "1.0.0"
   },
   "plugins": [
     {
