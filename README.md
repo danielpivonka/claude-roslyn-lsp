@@ -91,7 +91,7 @@ against a two-project fixture (`App` → `Lib`), and asserts cross-project seman
 resolve:
 
 ```
-python test/run-test.py
+node test/run-test.js
 ```
 
 Prints `PASS`/`FAIL` and exits non-zero on failure. Needs `node` and `dotnet`.
@@ -100,13 +100,13 @@ Prints `PASS`/`FAIL` and exits non-zero on failure. Needs `node` and `dotnet`.
 
 ```
 .
-├── .claude-plugin/marketplace.json     # marketplace listing the plugin + its LSP server
+├── .claude-plugin/marketplace.json     # marketplace catalog listing the plugin
 ├── plugins/roslyn-csharp/
-│   ├── .claude-plugin/plugin.json
+│   ├── .claude-plugin/plugin.json      # plugin manifest + LSP server declaration
 │   └── bin/roslyn-lsp-proxy.js         # the proxy (acquisition + solution/open injection)
 └── test/
     ├── fixture/                        # minimal App→Lib C# solution
-    └── run-test.py                     # integration test
+    └── run-test.js                     # integration test
 ```
 
 ## Troubleshooting
@@ -118,8 +118,8 @@ Prints `PASS`/`FAIL` and exits non-zero on failure. Needs `node` and `dotnet`.
   targets (currently .NET 10). Install it, or pin an older `ROSLYN_LSP_VERSION`.
 - **`${CLAUDE_PLUGIN_ROOT}` not expanded.** It's documented for plugin MCP servers
   and hooks; if your Claude Code build doesn't expand it for LSP `args`, edit
-  `.claude-plugin/marketplace.json` and replace it with the absolute path to
-  `plugins/roslyn-csharp`.
+  `plugins/roslyn-csharp/.claude-plugin/plugin.json` and replace it with the
+  absolute path to `plugins/roslyn-csharp`.
 - **First run is slow.** It's downloading ~40 MB once. Subsequent runs use the
   cache under your user cache directory.
 

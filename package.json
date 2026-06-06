@@ -16,11 +16,8 @@
   "engines": {
     "node": ">=18"
   },
-  "bin": {
-    "roslyn-lsp-proxy": "plugins/roslyn-csharp/bin/roslyn-lsp-proxy.js"
-  },
   "scripts": {
-    "test": "python test/run-test.py"
+    "test": "node test/run-test.js"
   },
   "keywords": [
     "lsp",

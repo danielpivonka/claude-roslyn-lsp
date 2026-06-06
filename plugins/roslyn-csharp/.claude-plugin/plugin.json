@@ -1,8 +1,18 @@
 {
   "name": "roslyn-csharp",
   "version": "1.0.0",
-  "description": "C# code intelligence via Microsoft's Roslyn language server, bridged through a stdio proxy that injects solution/open. The LSP server is declared in the marketplace manifest.",
+  "description": "C# code intelligence via Microsoft's Roslyn language server, bridged through a stdio proxy that injects the proprietary solution/open notification so a generic LSP client loads the full workspace.",
   "author": {
     "name": "Daniel Pivonka"
+  },
+  "lspServers": {
+    "roslyn-csharp": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/roslyn-lsp-proxy.js"],
+      "extensionToLanguage": {
+        ".cs": "csharp"
+      },
+      "startupTimeout": 600000
+    }
   }
 }
