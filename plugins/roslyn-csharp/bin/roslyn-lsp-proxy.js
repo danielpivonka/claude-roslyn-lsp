@@ -100,7 +100,13 @@ async function main() {
     process.exit(1);
   }
 
-  const child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
+  // On Windows, dotnet global tools are installed as .cmd batch scripts which
+  // require the shell to execute.  Use shell only on Windows to avoid the
+  // quoting/signal caveats it introduces on Unix.
+  const child = spawn(cmd, args, {
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: process.platform === "win32",
+  });
   child.on("error", (e) => {
     spawnError = e;
     if (pendingInitId !== null) {
